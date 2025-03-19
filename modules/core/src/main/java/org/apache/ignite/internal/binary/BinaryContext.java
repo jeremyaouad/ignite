@@ -867,9 +867,11 @@ public class BinaryContext {
      *
      * @param cls Class.
      * @return Serializer for class or {@code null} if none exists.
+     *
+     * Note: visible for testing.
      */
-    @Nullable private BinarySerializer serializerForClass(Class cls) {
-        BinarySerializer serializer = defaultSerializer();
+    @Nullable BinarySerializer serializerForClass(Class cls) {
+        BinarySerializer serializer = defaultSerializer(cls);
 
         if (serializer == null && canUseReflectiveSerializer(cls))
             serializer = new BinaryReflectiveSerializer();
@@ -878,12 +880,34 @@ public class BinaryContext {
     }
 
     /**
+     * Gets the default serializer for the given class.
+     *
+     * @param cls Class.
      * @return Default serializer.
      */
-    private BinarySerializer defaultSerializer() {
+    private BinarySerializer defaultSerializer(Class cls) {
         BinaryConfiguration binCfg = igniteCfg.getBinaryConfiguration();
+        if (binCfg == null) {
+            return null;
+        }
 
-        return binCfg != null ? binCfg.getSerializer() : null;
+        for (BinaryTypeConfiguration typeCfg : binCfg.getTypeConfigurations()) {
+            String typeCfgName = typeCfg.getTypeName();
+            if (typeCfgName == null || typeCfgName.isEmpty()) {
+                continue;
+            }
+
+            if (typeCfgName.endsWith(".*")) {
+                String pkgName = typeCfgName.substring(0, typeCfgName.length() - 2);
+                if (cls.getPackageName().equals(pkgName)) {
+                    return typeCfg.getSerializer();
+                }
+            } else if (cls.getCanonicalName().equals(typeCfgName)) {
+                return typeCfg.getSerializer();
+            }
+        }
+
+        return binCfg.getSerializer();
     }
 
     /**
